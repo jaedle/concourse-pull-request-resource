@@ -1,0 +1,19 @@
+{
+  "name": "concourse-pull-request-resource",
+  "version": "1.0.0",
+  "description": "Concourse CI resource for GitHub Pull Requests",
+  "main": "dist/check.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

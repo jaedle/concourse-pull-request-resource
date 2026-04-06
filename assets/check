@@ -1,0 +1,2 @@
+#!/bin/sh
+exec node /opt/resource/dist/check-entry.js "$@"
