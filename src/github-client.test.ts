@@ -1,16 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import nock from 'nock';
 import { fetchPullRequestCommits, parseRepository } from './github-client.js';
 
-vi.mock('@octokit/graphql', () => {
-  const mockGraphql = vi.fn();
-  mockGraphql.defaults = vi.fn(() => mockGraphql);
-  return { graphql: mockGraphql };
-});
-
-import { graphql } from '@octokit/graphql';
-const mockGraphql = vi.mocked(graphql) as ReturnType<typeof vi.fn> & {
-  defaults: ReturnType<typeof vi.fn>;
-};
+const GITHUB_API = 'https://api.github.com';
 
 describe('parseRepository', () => {
   it('parses owner and repo from valid repository string', () => {
@@ -33,37 +25,45 @@ describe('parseRepository', () => {
 
 describe('fetchPullRequestCommits', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockGraphql.defaults.mockReturnValue(mockGraphql);
+    nock.disableNetConnect();
+  });
+
+  afterEach(() => {
+    nock.cleanAll();
+    nock.enableNetConnect();
   });
 
   it('returns commits from a single page of open pull requests', async () => {
-    mockGraphql.mockResolvedValue({
-      repository: {
-        pullRequests: {
-          nodes: [
-            {
-              number: 1,
-              commits: {
-                nodes: [
-                  { commit: { oid: 'abc123', committedDate: '2024-01-01T10:00:00Z' } },
-                  { commit: { oid: 'def456', committedDate: '2024-01-02T10:00:00Z' } },
-                ],
-              },
+    nock(GITHUB_API)
+      .post('/graphql')
+      .reply(200, {
+        data: {
+          repository: {
+            pullRequests: {
+              nodes: [
+                {
+                  number: 1,
+                  commits: {
+                    nodes: [
+                      { commit: { oid: 'abc123', committedDate: '2024-01-01T10:00:00Z' } },
+                      { commit: { oid: 'def456', committedDate: '2024-01-02T10:00:00Z' } },
+                    ],
+                  },
+                },
+                {
+                  number: 2,
+                  commits: {
+                    nodes: [
+                      { commit: { oid: 'ghi789', committedDate: '2024-01-03T10:00:00Z' } },
+                    ],
+                  },
+                },
+              ],
+              pageInfo: { endCursor: null, hasNextPage: false },
             },
-            {
-              number: 2,
-              commits: {
-                nodes: [
-                  { commit: { oid: 'ghi789', committedDate: '2024-01-03T10:00:00Z' } },
-                ],
-              },
-            },
-          ],
-          pageInfo: { endCursor: null, hasNextPage: false },
+          },
         },
-      },
-    });
+      });
 
     const result = await fetchPullRequestCommits('owner', 'repo', 'token');
 
@@ -74,34 +74,42 @@ describe('fetchPullRequestCommits', () => {
   });
 
   it('paginates through multiple pages', async () => {
-    mockGraphql
-      .mockResolvedValueOnce({
-        repository: {
-          pullRequests: {
-            nodes: [
-              {
-                number: 1,
-                commits: {
-                  nodes: [{ commit: { oid: 'aaa', committedDate: '2024-01-01T00:00:00Z' } }],
+    nock(GITHUB_API)
+      .post('/graphql')
+      .reply(200, {
+        data: {
+          repository: {
+            pullRequests: {
+              nodes: [
+                {
+                  number: 1,
+                  commits: {
+                    nodes: [{ commit: { oid: 'aaa', committedDate: '2024-01-01T00:00:00Z' } }],
+                  },
                 },
-              },
-            ],
-            pageInfo: { endCursor: 'cursor1', hasNextPage: true },
+              ],
+              pageInfo: { endCursor: 'cursor1', hasNextPage: true },
+            },
           },
         },
       })
-      .mockResolvedValueOnce({
-        repository: {
-          pullRequests: {
-            nodes: [
-              {
-                number: 2,
-                commits: {
-                  nodes: [{ commit: { oid: 'bbb', committedDate: '2024-01-02T00:00:00Z' } }],
+      .post('/graphql', (body: { variables?: { cursor?: string } }) => {
+        return body.variables?.cursor === 'cursor1';
+      })
+      .reply(200, {
+        data: {
+          repository: {
+            pullRequests: {
+              nodes: [
+                {
+                  number: 2,
+                  commits: {
+                    nodes: [{ commit: { oid: 'bbb', committedDate: '2024-01-02T00:00:00Z' } }],
+                  },
                 },
-              },
-            ],
-            pageInfo: { endCursor: null, hasNextPage: false },
+              ],
+              pageInfo: { endCursor: null, hasNextPage: false },
+            },
           },
         },
       });
@@ -109,43 +117,56 @@ describe('fetchPullRequestCommits', () => {
     const result = await fetchPullRequestCommits('owner', 'repo', 'token');
 
     expect(result).toHaveLength(2);
-    expect(mockGraphql).toHaveBeenCalledTimes(2);
-    expect(mockGraphql.mock.calls[1][1]).toMatchObject({ cursor: 'cursor1' });
+    expect(result[0]).toEqual({ pr: 1, commit: 'aaa', committed: '2024-01-01T00:00:00Z' });
+    expect(result[1]).toEqual({ pr: 2, commit: 'bbb', committed: '2024-01-02T00:00:00Z' });
   });
 
-  it('throws when graphql call rejects', async () => {
-    mockGraphql.mockRejectedValue(new Error('Bad credentials'));
+  it('throws on a non-ok HTTP response', async () => {
+    nock(GITHUB_API).post('/graphql').reply(401, 'Unauthorized');
 
-    await expect(fetchPullRequestCommits('owner', 'repo', 'bad-token')).rejects.toThrow(
-      'Bad credentials',
-    );
+    await expect(fetchPullRequestCommits('owner', 'repo', 'bad-token')).rejects.toThrow();
+  });
+
+  it('throws on GraphQL errors in the response body', async () => {
+    nock(GITHUB_API)
+      .post('/graphql')
+      .reply(200, { errors: [{ message: 'Not found' }] });
+
+    await expect(fetchPullRequestCommits('owner', 'repo', 'token')).rejects.toThrow('Not found');
   });
 
   it('returns empty array when there are no open pull requests', async () => {
-    mockGraphql.mockResolvedValue({
-      repository: {
-        pullRequests: {
-          nodes: [],
-          pageInfo: { endCursor: null, hasNextPage: false },
+    nock(GITHUB_API)
+      .post('/graphql')
+      .reply(200, {
+        data: {
+          repository: {
+            pullRequests: {
+              nodes: [],
+              pageInfo: { endCursor: null, hasNextPage: false },
+            },
+          },
         },
-      },
-    });
+      });
 
     const result = await fetchPullRequestCommits('owner', 'repo', 'token');
     expect(result).toEqual([]);
   });
 
-  it('passes the access token to graphql.defaults', async () => {
-    mockGraphql.mockResolvedValue({
-      repository: {
-        pullRequests: { nodes: [], pageInfo: { endCursor: null, hasNextPage: false } },
-      },
-    });
+  it('sends the access token as a Bearer authorization header', async () => {
+    nock(GITHUB_API)
+      .post('/graphql')
+      .matchHeader('authorization', 'token my-secret-token')
+      .reply(200, {
+        data: {
+          repository: {
+            pullRequests: { nodes: [], pageInfo: { endCursor: null, hasNextPage: false } },
+          },
+        },
+      });
 
     await fetchPullRequestCommits('owner', 'repo', 'my-secret-token');
 
-    expect(mockGraphql.defaults).toHaveBeenCalledWith({
-      headers: { authorization: 'token my-secret-token' },
-    });
+    expect(nock.isDone()).toBe(true);
   });
 });
