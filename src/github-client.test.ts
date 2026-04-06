@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchPullRequestCommits, parseRepository } from './github-client.js';
 
+vi.mock('@octokit/graphql', () => {
+  const mockGraphql = vi.fn();
+  mockGraphql.defaults = vi.fn(() => mockGraphql);
+  return { graphql: mockGraphql };
+});
+
+import { graphql } from '@octokit/graphql';
+const mockGraphql = vi.mocked(graphql) as ReturnType<typeof vi.fn> & {
+  defaults: ReturnType<typeof vi.fn>;
+};
+
 describe('parseRepository', () => {
   it('parses owner and repo from valid repository string', () => {
     const result = parseRepository('myorg/myrepo');
@@ -22,46 +33,37 @@ describe('parseRepository', () => {
 
 describe('fetchPullRequestCommits', () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
+    mockGraphql.defaults.mockReturnValue(mockGraphql);
   });
 
   it('returns commits from a single page of open pull requests', async () => {
-    const mockResponse = {
-      data: {
-        repository: {
-          pullRequests: {
-            nodes: [
-              {
-                number: 1,
-                commits: {
-                  nodes: [
-                    { commit: { oid: 'abc123', committedDate: '2024-01-01T10:00:00Z' } },
-                    { commit: { oid: 'def456', committedDate: '2024-01-02T10:00:00Z' } },
-                  ],
-                },
+    mockGraphql.mockResolvedValue({
+      repository: {
+        pullRequests: {
+          nodes: [
+            {
+              number: 1,
+              commits: {
+                nodes: [
+                  { commit: { oid: 'abc123', committedDate: '2024-01-01T10:00:00Z' } },
+                  { commit: { oid: 'def456', committedDate: '2024-01-02T10:00:00Z' } },
+                ],
               },
-              {
-                number: 2,
-                commits: {
-                  nodes: [
-                    { commit: { oid: 'ghi789', committedDate: '2024-01-03T10:00:00Z' } },
-                  ],
-                },
+            },
+            {
+              number: 2,
+              commits: {
+                nodes: [
+                  { commit: { oid: 'ghi789', committedDate: '2024-01-03T10:00:00Z' } },
+                ],
               },
-            ],
-            pageInfo: { endCursor: null, hasNextPage: false },
-          },
+            },
+          ],
+          pageInfo: { endCursor: null, hasNextPage: false },
         },
       },
-    };
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      }),
-    );
+    });
 
     const result = await fetchPullRequestCommits('owner', 'repo', 'token');
 
@@ -72,8 +74,8 @@ describe('fetchPullRequestCommits', () => {
   });
 
   it('paginates through multiple pages', async () => {
-    const page1 = {
-      data: {
+    mockGraphql
+      .mockResolvedValueOnce({
         repository: {
           pullRequests: {
             nodes: [
@@ -87,10 +89,8 @@ describe('fetchPullRequestCommits', () => {
             pageInfo: { endCursor: 'cursor1', hasNextPage: true },
           },
         },
-      },
-    };
-    const page2 = {
-      data: {
+      })
+      .mockResolvedValueOnce({
         repository: {
           pullRequests: {
             nodes: [
@@ -104,69 +104,48 @@ describe('fetchPullRequestCommits', () => {
             pageInfo: { endCursor: null, hasNextPage: false },
           },
         },
-      },
-    };
-
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page1) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(page2) });
-
-    vi.stubGlobal('fetch', mockFetch);
+      });
 
     const result = await fetchPullRequestCommits('owner', 'repo', 'token');
 
     expect(result).toHaveLength(2);
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
-    expect(secondCallBody.variables.cursor).toBe('cursor1');
+    expect(mockGraphql).toHaveBeenCalledTimes(2);
+    expect(mockGraphql.mock.calls[1][1]).toMatchObject({ cursor: 'cursor1' });
   });
 
-  it('throws on non-ok HTTP response', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized' }),
-    );
+  it('throws when graphql call rejects', async () => {
+    mockGraphql.mockRejectedValue(new Error('Bad credentials'));
 
     await expect(fetchPullRequestCommits('owner', 'repo', 'bad-token')).rejects.toThrow(
-      'GitHub API request failed: 401 Unauthorized',
-    );
-  });
-
-  it('throws on GraphQL errors', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ errors: [{ message: 'Not found' }] }),
-      }),
-    );
-
-    await expect(fetchPullRequestCommits('owner', 'repo', 'token')).rejects.toThrow(
-      'GitHub API error: Not found',
+      'Bad credentials',
     );
   });
 
   it('returns empty array when there are no open pull requests', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            data: {
-              repository: {
-                pullRequests: {
-                  nodes: [],
-                  pageInfo: { endCursor: null, hasNextPage: false },
-                },
-              },
-            },
-          }),
-      }),
-    );
+    mockGraphql.mockResolvedValue({
+      repository: {
+        pullRequests: {
+          nodes: [],
+          pageInfo: { endCursor: null, hasNextPage: false },
+        },
+      },
+    });
 
     const result = await fetchPullRequestCommits('owner', 'repo', 'token');
     expect(result).toEqual([]);
+  });
+
+  it('passes the access token to graphql.defaults', async () => {
+    mockGraphql.mockResolvedValue({
+      repository: {
+        pullRequests: { nodes: [], pageInfo: { endCursor: null, hasNextPage: false } },
+      },
+    });
+
+    await fetchPullRequestCommits('owner', 'repo', 'my-secret-token');
+
+    expect(mockGraphql.defaults).toHaveBeenCalledWith({
+      headers: { authorization: 'token my-secret-token' },
+    });
   });
 });

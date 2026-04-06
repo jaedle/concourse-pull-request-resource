@@ -9,6 +9,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@octokit/graphql": "^9.0.3",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {

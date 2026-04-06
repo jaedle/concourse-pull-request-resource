@@ -1,6 +1,5 @@
+import { graphql } from '@octokit/graphql';
 import { PullRequestCommit } from './types.js';
-
-const GITHUB_GRAPHQL_URL = 'https://api.github.com/graphql';
 
 const PULL_REQUESTS_QUERY = `
 query GetPullRequests($owner: String!, $repo: String!, $cursor: String) {
@@ -40,19 +39,16 @@ interface PullRequestNode {
   };
 }
 
-interface QueryResponse {
-  data: {
-    repository: {
-      pullRequests: {
-        nodes: PullRequestNode[];
-        pageInfo: {
-          endCursor: string | null;
-          hasNextPage: boolean;
-        };
+interface PullRequestsResponse {
+  repository: {
+    pullRequests: {
+      nodes: PullRequestNode[];
+      pageInfo: {
+        endCursor: string | null;
+        hasNextPage: boolean;
       };
     };
   };
-  errors?: Array<{ message: string }>;
 }
 
 export async function fetchPullRequestCommits(
@@ -60,33 +56,21 @@ export async function fetchPullRequestCommits(
   repo: string,
   accessToken: string,
 ): Promise<PullRequestCommit[]> {
+  const graphqlWithAuth = graphql.defaults({
+    headers: { authorization: `token ${accessToken}` },
+  });
+
   const commits: PullRequestCommit[] = [];
   let cursor: string | null = null;
 
   do {
-    const response = await fetch(GITHUB_GRAPHQL_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: PULL_REQUESTS_QUERY,
-        variables: { owner, repo, cursor },
-      }),
+    const result: PullRequestsResponse = await graphqlWithAuth<PullRequestsResponse>(PULL_REQUESTS_QUERY, {
+      owner,
+      repo,
+      cursor,
     });
 
-    if (!response.ok) {
-      throw new Error(`GitHub API request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const result = (await response.json()) as QueryResponse;
-
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(`GitHub API error: ${result.errors.map((e) => e.message).join(', ')}`);
-    }
-
-    const pullRequests = result.data.repository.pullRequests;
+    const pullRequests: PullRequestsResponse['repository']['pullRequests'] = result.repository.pullRequests;
 
     for (const pr of pullRequests.nodes) {
       for (const node of pr.commits.nodes) {
@@ -98,11 +82,7 @@ export async function fetchPullRequestCommits(
       }
     }
 
-    if (pullRequests.pageInfo.hasNextPage) {
-      cursor = pullRequests.pageInfo.endCursor;
-    } else {
-      cursor = null;
-    }
+    cursor = pullRequests.pageInfo.hasNextPage ? pullRequests.pageInfo.endCursor : null;
   } while (cursor !== null);
 
   return commits;
