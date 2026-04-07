@@ -16,10 +16,16 @@ export class SimpleGitClient implements GitClient {
   }
 
   async fetch(remote: string, ref: string): Promise<void> {
-    await simpleGit(this.destDir!).fetch(remote, ref);
+    if (!this.destDir) {
+      throw new Error('clone() must be called before fetch()');
+    }
+    await simpleGit(this.destDir).fetch(remote, ref);
   }
 
   async merge(args: string[]): Promise<void> {
-    await simpleGit(this.destDir!).merge(args);
+    if (!this.destDir) {
+      throw new Error('clone() must be called before merge()');
+    }
+    await simpleGit(this.destDir).merge(args);
   }
 }
