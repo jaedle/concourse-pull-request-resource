@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import nock from 'nock';
-import { fetchPullRequestCommits, parseRepository } from './github-client.js';
+import { GitHubClient, parseRepository } from './github-client.js';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -23,7 +23,7 @@ describe('parseRepository', () => {
   });
 });
 
-describe('fetchPullRequestCommits', () => {
+describe('GitHubClient.fetchPullRequestCommits', () => {
   beforeEach(() => {
     nock.disableNetConnect();
   });
@@ -65,7 +65,8 @@ describe('fetchPullRequestCommits', () => {
         },
       });
 
-    const result = await fetchPullRequestCommits('owner', 'repo', 'token');
+    const client = new GitHubClient('token');
+    const result = await client.fetchPullRequestCommits('owner', 'repo');
 
     expect(result).toHaveLength(3);
     expect(result[0]).toEqual({ pr: 1, commit: 'abc123', committed: '2024-01-01T10:00:00Z' });
@@ -114,7 +115,8 @@ describe('fetchPullRequestCommits', () => {
         },
       });
 
-    const result = await fetchPullRequestCommits('owner', 'repo', 'token');
+    const client = new GitHubClient('token');
+    const result = await client.fetchPullRequestCommits('owner', 'repo');
 
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual({ pr: 1, commit: 'aaa', committed: '2024-01-01T00:00:00Z' });
@@ -124,7 +126,8 @@ describe('fetchPullRequestCommits', () => {
   it('throws on a non-ok HTTP response', async () => {
     nock(GITHUB_API).post('/graphql').reply(401, 'Unauthorized');
 
-    await expect(fetchPullRequestCommits('owner', 'repo', 'bad-token')).rejects.toThrow();
+    const client = new GitHubClient('bad-token');
+    await expect(client.fetchPullRequestCommits('owner', 'repo')).rejects.toThrow();
   });
 
   it('throws on GraphQL errors in the response body', async () => {
@@ -132,7 +135,8 @@ describe('fetchPullRequestCommits', () => {
       .post('/graphql')
       .reply(200, { errors: [{ message: 'Not found' }] });
 
-    await expect(fetchPullRequestCommits('owner', 'repo', 'token')).rejects.toThrow('Not found');
+    const client = new GitHubClient('token');
+    await expect(client.fetchPullRequestCommits('owner', 'repo')).rejects.toThrow('Not found');
   });
 
   it('returns empty array when there are no open pull requests', async () => {
@@ -149,11 +153,12 @@ describe('fetchPullRequestCommits', () => {
         },
       });
 
-    const result = await fetchPullRequestCommits('owner', 'repo', 'token');
+    const client = new GitHubClient('token');
+    const result = await client.fetchPullRequestCommits('owner', 'repo');
     expect(result).toEqual([]);
   });
 
-  it('sends the access token as a Bearer authorization header', async () => {
+  it('sends the access token as an authorization header', async () => {
     nock(GITHUB_API)
       .post('/graphql')
       .matchHeader('authorization', 'token my-secret-token')
@@ -165,7 +170,8 @@ describe('fetchPullRequestCommits', () => {
         },
       });
 
-    await fetchPullRequestCommits('owner', 'repo', 'my-secret-token');
+    const client = new GitHubClient('my-secret-token');
+    await client.fetchPullRequestCommits('owner', 'repo');
 
     expect(nock.isDone()).toBe(true);
   });

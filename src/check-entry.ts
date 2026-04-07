@@ -1,21 +1,19 @@
 import { check } from './check.js';
+import { GitHubClient } from './github-client.js';
 import { CheckInput } from './types.js';
 
-function readStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
-      data += chunk;
-    });
-    process.stdin.on('end', () => resolve(data));
-    process.stdin.on('error', reject);
-  });
+async function readStdin(): Promise<string> {
+  const chunks: string[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as string);
+  }
+  return chunks.join('');
 }
 
 async function main(): Promise<void> {
   const input: CheckInput = JSON.parse(await readStdin());
-  const versions = await check(input);
+  const client = new GitHubClient(input.source.access_token);
+  const versions = await check(input, client);
   process.stdout.write(JSON.stringify(versions) + '\n');
 }
 

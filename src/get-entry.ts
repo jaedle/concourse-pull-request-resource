@@ -1,16 +1,13 @@
 import { get } from './get.js';
+import { SimpleGitClient } from './git-client.js';
 import { GetInput } from './types.js';
 
-function readStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => {
-      data += chunk;
-    });
-    process.stdin.on('end', () => resolve(data));
-    process.stdin.on('error', reject);
-  });
+async function readStdin(): Promise<string> {
+  const chunks: string[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as string);
+  }
+  return chunks.join('');
 }
 
 async function main(): Promise<void> {
@@ -20,7 +17,7 @@ async function main(): Promise<void> {
   }
 
   const input: GetInput = JSON.parse(await readStdin());
-  const output = await get(destination, input);
+  const output = await get(destination, input, new SimpleGitClient());
   process.stdout.write(JSON.stringify(output) + '\n');
 }
 

@@ -1,28 +1,31 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from './get.js';
+import { GitClient } from './git-client.js';
 import { GetInput } from './types.js';
 
-vi.mock('simple-git', () => {
-  const repoGitMock = {
-    fetch: vi.fn().mockResolvedValue(undefined),
-    merge: vi.fn().mockResolvedValue(undefined),
-  };
-  const rootGitMock = {
-    clone: vi.fn().mockResolvedValue(undefined),
-  };
-  return {
-    simpleGit: vi.fn((dir?: string) => (dir ? repoGitMock : rootGitMock)),
-    __repoGitMock: repoGitMock,
-    __rootGitMock: rootGitMock,
-  };
-});
+class FakeGitClient implements GitClient {
+  clonedUrl: string | null = null;
+  clonedDest: string | null = null;
+  clonedOptions: string[] | null = null;
+  fetchedRemote: string | null = null;
+  fetchedRef: string | null = null;
+  mergedArgs: string[] | null = null;
 
-import * as simpleGitModule from 'simple-git';
+  async clone(url: string, dest: string, options: string[]): Promise<void> {
+    this.clonedUrl = url;
+    this.clonedDest = dest;
+    this.clonedOptions = options;
+  }
 
-const { __repoGitMock: repoGit, __rootGitMock: rootGit } = simpleGitModule as unknown as {
-  __repoGitMock: { fetch: ReturnType<typeof vi.fn>; merge: ReturnType<typeof vi.fn> };
-  __rootGitMock: { clone: ReturnType<typeof vi.fn> };
-};
+  async fetch(remote: string, ref: string): Promise<void> {
+    this.fetchedRemote = remote;
+    this.fetchedRef = ref;
+  }
+
+  async merge(args: string[]): Promise<void> {
+    this.mergedArgs = args;
+  }
+}
 
 const input: GetInput = {
   source: { repository: 'owner/repo', access_token: 'mytoken' },
@@ -30,42 +33,40 @@ const input: GetInput = {
 };
 
 describe('get', () => {
+  let fakeGit: FakeGitClient;
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    fakeGit = new FakeGitClient();
   });
 
   it('clones the repository using the access token', async () => {
-    await get('/tmp/dest', input);
+    await get('/tmp/dest', input, fakeGit);
 
-    expect(rootGit.clone).toHaveBeenCalledWith(
-      'https://x-oauth-basic:mytoken@github.com/owner/repo.git',
-      expect.stringContaining('dest'),
-      ['--depth', '1'],
-    );
+    expect(fakeGit.clonedUrl).toBe('https://x-oauth-basic:mytoken@github.com/owner/repo.git');
+    expect(fakeGit.clonedDest).toContain('dest');
+    expect(fakeGit.clonedOptions).toEqual(['--depth', '1']);
   });
 
   it('fetches the PR head ref', async () => {
-    await get('/tmp/dest', input);
-    expect(repoGit.fetch).toHaveBeenCalledWith('origin', 'pull/42/head');
+    await get('/tmp/dest', input, fakeGit);
+
+    expect(fakeGit.fetchedRemote).toBe('origin');
+    expect(fakeGit.fetchedRef).toBe('pull/42/head');
   });
 
   it('merges the specified commit', async () => {
-    await get('/tmp/dest', input);
-    expect(repoGit.merge).toHaveBeenCalledWith(
-      expect.arrayContaining(['deadbeef']),
-    );
+    await get('/tmp/dest', input, fakeGit);
+
+    expect(fakeGit.mergedArgs).toContain('deadbeef');
   });
 
   it('returns the version and metadata', async () => {
-    const result = await get('/tmp/dest', input);
+    const result = await get('/tmp/dest', input, fakeGit);
 
     expect(result.version).toEqual(input.version);
     expect(result.metadata).toContainEqual({ name: 'pr', value: '42' });
     expect(result.metadata).toContainEqual({ name: 'commit', value: 'deadbeef' });
-    expect(result.metadata).toContainEqual({
-      name: 'committed',
-      value: '2024-06-01T12:00:00Z',
-    });
+    expect(result.metadata).toContainEqual({ name: 'committed', value: '2024-06-01T12:00:00Z' });
   });
 
   it('throws when repository format is invalid', async () => {
@@ -73,6 +74,6 @@ describe('get', () => {
       ...input,
       source: { ...input.source, repository: 'noslash' },
     };
-    await expect(get('/tmp/dest', badInput)).rejects.toThrow('Invalid repository format');
+    await expect(get('/tmp/dest', badInput, fakeGit)).rejects.toThrow('Invalid repository format');
   });
 });

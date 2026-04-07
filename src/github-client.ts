@@ -51,41 +51,46 @@ interface PullRequestsResponse {
   };
 }
 
-export async function fetchPullRequestCommits(
-  owner: string,
-  repo: string,
-  accessToken: string,
-): Promise<PullRequestCommit[]> {
-  const graphqlWithAuth = graphql.defaults({
-    headers: { authorization: `token ${accessToken}` },
-  });
+export interface PullRequestFetcher {
+  fetchPullRequestCommits(owner: string, repo: string): Promise<PullRequestCommit[]>;
+}
 
-  const commits: PullRequestCommit[] = [];
-  let cursor: string | null = null;
+export class GitHubClient implements PullRequestFetcher {
+  private readonly graphqlWithAuth: typeof graphql;
 
-  do {
-    const result: PullRequestsResponse = await graphqlWithAuth<PullRequestsResponse>(PULL_REQUESTS_QUERY, {
-      owner,
-      repo,
-      cursor,
+  constructor(accessToken: string) {
+    this.graphqlWithAuth = graphql.defaults({
+      headers: { authorization: `token ${accessToken}` },
     });
+  }
 
-    const pullRequests: PullRequestsResponse['repository']['pullRequests'] = result.repository.pullRequests;
+  async fetchPullRequestCommits(owner: string, repo: string): Promise<PullRequestCommit[]> {
+    const commits: PullRequestCommit[] = [];
+    let cursor: string | null = null;
 
-    for (const pr of pullRequests.nodes) {
-      for (const node of pr.commits.nodes) {
-        commits.push({
-          pr: pr.number,
-          commit: node.commit.oid,
-          committed: node.commit.committedDate,
-        });
+    do {
+      const result: PullRequestsResponse = await this.graphqlWithAuth<PullRequestsResponse>(
+        PULL_REQUESTS_QUERY,
+        { owner, repo, cursor },
+      );
+
+      const pullRequests = result.repository.pullRequests;
+
+      for (const pr of pullRequests.nodes) {
+        for (const node of pr.commits.nodes) {
+          commits.push({
+            pr: pr.number,
+            commit: node.commit.oid,
+            committed: node.commit.committedDate,
+          });
+        }
       }
-    }
 
-    cursor = pullRequests.pageInfo.hasNextPage ? pullRequests.pageInfo.endCursor : null;
-  } while (cursor !== null);
+      cursor = pullRequests.pageInfo.hasNextPage ? pullRequests.pageInfo.endCursor : null;
+    } while (cursor !== null);
 
-  return commits;
+    return commits;
+  }
 }
 
 export function parseRepository(repository: string): { owner: string; repo: string } {

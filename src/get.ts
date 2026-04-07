@@ -1,9 +1,13 @@
-import { simpleGit } from 'simple-git';
 import * as path from 'path';
 import { GetInput, GetOutput } from './types.js';
 import { parseRepository } from './github-client.js';
+import { GitClient, SimpleGitClient } from './git-client.js';
 
-export async function get(destination: string, input: GetInput): Promise<GetOutput> {
+export async function get(
+  destination: string,
+  input: GetInput,
+  git: GitClient = new SimpleGitClient(),
+): Promise<GetOutput> {
   const { owner, repo } = parseRepository(input.source.repository);
   const { pr, commit } = input.version;
   const token = input.source.access_token;
@@ -11,15 +15,9 @@ export async function get(destination: string, input: GetInput): Promise<GetOutp
   const repoUrl = `https://x-oauth-basic:${token}@github.com/${owner}/${repo}.git`;
   const destDir = path.resolve(destination);
 
-  const git = simpleGit();
-
   await git.clone(repoUrl, destDir, ['--depth', '1']);
-
-  const repoGit = simpleGit(destDir);
-
-  await repoGit.fetch('origin', `pull/${pr}/head`);
-
-  await repoGit.merge([
+  await git.fetch('origin', `pull/${pr}/head`);
+  await git.merge([
     '--no-ff',
     '--no-edit',
     '-m',
@@ -36,4 +34,3 @@ export async function get(destination: string, input: GetInput): Promise<GetOutp
     ],
   };
 }
-

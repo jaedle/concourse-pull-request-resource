@@ -1,0 +1,37 @@
+version: "3"
+
+tasks:
+  install:
+    desc: Install dependencies
+    cmds:
+      - npm ci
+
+  build:
+    desc: Compile TypeScript to dist/
+    cmds:
+      - npx tsc
+    sources:
+      - src/**/*.ts
+      - tsconfig.json
+    generates:
+      - dist/**/*.js
+
+  lint:
+    desc: Type-check without emitting files
+    cmds:
+      - npx tsc --noEmit
+
+  test:
+    desc: Run all tests
+    cmds:
+      - npx vitest run
+
+  check-local:
+    desc: "Run the check command locally (reads JSON from stdin). Usage: echo '<json>' | task check-local"
+    cmds:
+      - node dist/check-entry.js
+
+  get-local:
+    desc: "Run the get command locally. Usage: echo '<json>' | task get-local -- <destination-dir>"
+    cmds:
+      - node dist/get-entry.js {{.CLI_ARGS}}
