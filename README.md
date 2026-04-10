@@ -7,6 +7,40 @@ the resource.
 
 This resource uses the GraphQL API of GitHub, so it should be faster than the REST API.
 
+## Development
+
+### Prerequisites
+
+Install [mise-en-place](https://mise.jdx.dev/) for tool version management, then run:
+
+```bash
+mise install      # installs node 24 and go-task
+npm ci            # install Node dependencies
+```
+
+### Available tasks
+
+```bash
+task build        # compile TypeScript to dist/
+task test         # run all tests
+task lint         # type-check without emitting files
+```
+
+### Running check/get locally
+
+Build first, then pipe a JSON payload to the task:
+
+```bash
+task build
+
+# check: returns new versions
+echo '{"source":{"repository":"owner/repo","access_token":"ghp_..."}}' | task check-local
+
+# get: clones and merges a PR into a destination directory
+echo '{"source":{"repository":"owner/repo","access_token":"ghp_..."},"version":{"pr":"1","commit":"abc123","committed":"2024-01-01T00:00:00Z"}}' \
+  | task get-local -- /tmp/pr-output
+```
+
 ## Supported Actions
 
 ### check

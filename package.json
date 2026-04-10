@@ -1,0 +1,16 @@
+{
+  "name": "concourse-pull-request-resource",
+  "version": "1.0.0",
+  "description": "Concourse CI resource for GitHub Pull Requests",
+  "main": "dist/check.js",
+  "dependencies": {
+    "@octokit/graphql": "^9.0.3",
+    "simple-git": "^3.35.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "nock": "^14.0.12",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
+  }
+}
