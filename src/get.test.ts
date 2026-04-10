@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { get } from './get.js';
-import { GitClient } from './git-client.js';
-import { GetInput } from './types.js';
+import { beforeEach, describe, expect, it } from "vitest";
+import { get } from "./get.js";
+import type { GitClient } from "./git-client.js";
+import type { GetInput } from "./types.js";
 
 class FakeGitClient implements GitClient {
   clonedUrl: string | null = null;
@@ -28,52 +28,62 @@ class FakeGitClient implements GitClient {
 }
 
 const input: GetInput = {
-  source: { repository: 'owner/repo', access_token: 'mytoken' },
-  version: { pr: '42', commit: 'deadbeef', committed: '2024-06-01T12:00:00Z' },
+  source: { repository: "owner/repo", access_token: "mytoken" },
+  version: { pr: "42", commit: "deadbeef", committed: "2024-06-01T12:00:00Z" },
 };
 
-describe('get', () => {
+describe("get", () => {
   let fakeGit: FakeGitClient;
 
   beforeEach(() => {
     fakeGit = new FakeGitClient();
   });
 
-  it('clones the repository using the access token', async () => {
-    await get('/tmp/dest', input, fakeGit);
+  it("clones the repository using the access token", async () => {
+    await get("/tmp/dest", input, fakeGit);
 
-    expect(fakeGit.clonedUrl).toBe('https://x-oauth-basic:mytoken@github.com/owner/repo.git');
-    expect(fakeGit.clonedDest).toContain('dest');
-    expect(fakeGit.clonedOptions).toEqual(['--depth', '1']);
+    expect(fakeGit.clonedUrl).toBe(
+      "https://x-oauth-basic:mytoken@github.com/owner/repo.git",
+    );
+    expect(fakeGit.clonedDest).toContain("dest");
+    expect(fakeGit.clonedOptions).toEqual(["--depth", "1"]);
   });
 
-  it('fetches the PR head ref', async () => {
-    await get('/tmp/dest', input, fakeGit);
+  it("fetches the PR head ref", async () => {
+    await get("/tmp/dest", input, fakeGit);
 
-    expect(fakeGit.fetchedRemote).toBe('origin');
-    expect(fakeGit.fetchedRef).toBe('pull/42/head');
+    expect(fakeGit.fetchedRemote).toBe("origin");
+    expect(fakeGit.fetchedRef).toBe("pull/42/head");
   });
 
-  it('merges the specified commit', async () => {
-    await get('/tmp/dest', input, fakeGit);
+  it("merges the specified commit", async () => {
+    await get("/tmp/dest", input, fakeGit);
 
-    expect(fakeGit.mergedArgs).toContain('deadbeef');
+    expect(fakeGit.mergedArgs).toContain("deadbeef");
   });
 
-  it('returns the version and metadata', async () => {
-    const result = await get('/tmp/dest', input, fakeGit);
+  it("returns the version and metadata", async () => {
+    const result = await get("/tmp/dest", input, fakeGit);
 
     expect(result.version).toEqual(input.version);
-    expect(result.metadata).toContainEqual({ name: 'pr', value: '42' });
-    expect(result.metadata).toContainEqual({ name: 'commit', value: 'deadbeef' });
-    expect(result.metadata).toContainEqual({ name: 'committed', value: '2024-06-01T12:00:00Z' });
+    expect(result.metadata).toContainEqual({ name: "pr", value: "42" });
+    expect(result.metadata).toContainEqual({
+      name: "commit",
+      value: "deadbeef",
+    });
+    expect(result.metadata).toContainEqual({
+      name: "committed",
+      value: "2024-06-01T12:00:00Z",
+    });
   });
 
-  it('throws when repository format is invalid', async () => {
+  it("throws when repository format is invalid", async () => {
     const badInput: GetInput = {
       ...input,
-      source: { ...input.source, repository: 'noslash' },
+      source: { ...input.source, repository: "noslash" },
     };
-    await expect(get('/tmp/dest', badInput, fakeGit)).rejects.toThrow('Invalid repository format');
+    await expect(get("/tmp/dest", badInput, fakeGit)).rejects.toThrow(
+      "Invalid repository format",
+    );
   });
 });

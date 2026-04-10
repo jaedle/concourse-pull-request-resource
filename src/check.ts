@@ -1,13 +1,19 @@
-import { CheckInput, Version, PullRequestCommit } from './types.js';
-import { PullRequestFetcher, parseRepository } from './github-client.js';
+import { type PullRequestFetcher, parseRepository } from "./github-client.js";
+import type { CheckInput, PullRequestCommit, Version } from "./types.js";
 
-export async function check(input: CheckInput, client: PullRequestFetcher): Promise<Version[]> {
+export async function check(
+  input: CheckInput,
+  client: PullRequestFetcher,
+): Promise<Version[]> {
   const { owner, repo } = parseRepository(input.source.repository);
   const commits = await client.fetchPullRequestCommits(owner, repo);
 
-  const sorted = commits.slice().sort(
-    (a, b) => new Date(a.committed).getTime() - new Date(b.committed).getTime(),
-  );
+  const sorted = commits
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(a.committed).getTime() - new Date(b.committed).getTime(),
+    );
 
   if (sorted.length === 0) {
     return [];

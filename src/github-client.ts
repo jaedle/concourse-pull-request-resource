@@ -1,5 +1,5 @@
-import { graphql } from '@octokit/graphql';
-import { PullRequestCommit } from './types.js';
+import { graphql } from "@octokit/graphql";
+import type { PullRequestCommit } from "./types.js";
 
 const PULL_REQUESTS_QUERY = `
 query GetPullRequests($owner: String!, $repo: String!, $cursor: String) {
@@ -52,7 +52,10 @@ interface PullRequestsResponse {
 }
 
 export interface PullRequestFetcher {
-  fetchPullRequestCommits(owner: string, repo: string): Promise<PullRequestCommit[]>;
+  fetchPullRequestCommits(
+    owner: string,
+    repo: string,
+  ): Promise<PullRequestCommit[]>;
 }
 
 export class GitHubClient implements PullRequestFetcher {
@@ -64,15 +67,20 @@ export class GitHubClient implements PullRequestFetcher {
     });
   }
 
-  async fetchPullRequestCommits(owner: string, repo: string): Promise<PullRequestCommit[]> {
+  async fetchPullRequestCommits(
+    owner: string,
+    repo: string,
+  ): Promise<PullRequestCommit[]> {
     const commits: PullRequestCommit[] = [];
     let cursor: string | null = null;
 
     do {
-      const result: PullRequestsResponse = await this.graphqlWithAuth<PullRequestsResponse>(
-        PULL_REQUESTS_QUERY,
-        { owner, repo, cursor },
-      );
+      const result: PullRequestsResponse =
+        await this.graphqlWithAuth<PullRequestsResponse>(PULL_REQUESTS_QUERY, {
+          owner,
+          repo,
+          cursor,
+        });
 
       const pullRequests = result.repository.pullRequests;
 
@@ -86,17 +94,24 @@ export class GitHubClient implements PullRequestFetcher {
         }
       }
 
-      cursor = pullRequests.pageInfo.hasNextPage ? pullRequests.pageInfo.endCursor : null;
+      cursor = pullRequests.pageInfo.hasNextPage
+        ? pullRequests.pageInfo.endCursor
+        : null;
     } while (cursor !== null);
 
     return commits;
   }
 }
 
-export function parseRepository(repository: string): { owner: string; repo: string } {
-  const parts = repository.split('/');
+export function parseRepository(repository: string): {
+  owner: string;
+  repo: string;
+} {
+  const parts = repository.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(`Invalid repository format: "${repository}". Expected "owner/repo".`);
+    throw new Error(
+      `Invalid repository format: "${repository}". Expected "owner/repo".`,
+    );
   }
   return { owner: parts[0], repo: parts[1] };
 }

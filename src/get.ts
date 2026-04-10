@@ -1,7 +1,7 @@
-import * as path from 'path';
-import { GetInput, GetOutput } from './types.js';
-import { parseRepository } from './github-client.js';
-import { GitClient, SimpleGitClient } from './git-client.js';
+import * as path from "node:path";
+import { type GitClient, SimpleGitClient } from "./git-client.js";
+import { parseRepository } from "./github-client.js";
+import type { GetInput, GetOutput } from "./types.js";
 
 export async function get(
   destination: string,
@@ -15,12 +15,12 @@ export async function get(
   const repoUrl = `https://x-oauth-basic:${token}@github.com/${owner}/${repo}.git`;
   const destDir = path.resolve(destination);
 
-  await git.clone(repoUrl, destDir, ['--depth', '1']);
-  await git.fetch('origin', `pull/${pr}/head`);
+  await git.clone(repoUrl, destDir, ["--depth", "1"]);
+  await git.fetch("origin", `pull/${pr}/head`);
   await git.merge([
-    '--no-ff',
-    '--no-edit',
-    '-m',
+    "--no-ff",
+    "--no-edit",
+    "-m",
     `Merge pull request #${pr} commit ${commit}`,
     commit,
   ]);
@@ -28,9 +28,9 @@ export async function get(
   return {
     version: input.version,
     metadata: [
-      { name: 'pr', value: pr },
-      { name: 'commit', value: commit },
-      { name: 'committed', value: input.version.committed },
+      { name: "pr", value: pr },
+      { name: "commit", value: commit },
+      { name: "committed", value: input.version.committed },
     ],
   };
 }

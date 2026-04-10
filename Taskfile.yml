@@ -8,6 +8,7 @@ tasks:
       - task: install
       - task: build
       - task: type-check
+      - task: lint
       - task: test
       - task: build-docker-image
 
@@ -34,7 +35,12 @@ tasks:
 
   test:
     desc: Run tests
+    deps: [ lint ]
     cmd: npx vitest run
+
+  lint:
+    desc: Lint and format check
+    cmd: npx biome check src/
 
   check-local:
     desc: "Run the check command locally (reads JSON from stdin). Usage: echo '<json>' | task check-local"

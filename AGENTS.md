@@ -4,6 +4,10 @@
 - runtime: nodejs 24
 - testing: vitest
 
+## Validation
+
+**Run !`task world` to verify your changes.**
+
 ## CI
 
 - GitHub Actions

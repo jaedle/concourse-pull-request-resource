@@ -8,6 +8,7 @@
     "simple-git": "^3.35.2"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.11",
     "@types/node": "^24.0.0",
     "nock": "^14.0.12",
     "typescript": "^5.8.3",
