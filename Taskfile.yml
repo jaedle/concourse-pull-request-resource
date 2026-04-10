@@ -7,9 +7,9 @@ tasks:
     cmds:
       - task: install
       - task: build
-      - task: build-docker-image
-      - task: lint
+      - task: type-check
       - task: test
+      - task: build-docker-image
 
   install:
     desc: Install dependencies
@@ -28,7 +28,7 @@ tasks:
 
   clean: rm -rf dist/
 
-  lint:
+  type-check:
     desc: Perform type checks
     cmd: npx tsc --noEmit
 
