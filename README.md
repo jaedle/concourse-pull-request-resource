@@ -34,11 +34,14 @@ Build first, then pipe a JSON payload to the task:
 task build
 
 # check: returns new versions
-echo '{"source":{"repository":"owner/repo","access_token":"ghp_..."}}' | task check-local
+REPO='concourse/concourse' 
+GITHUB_TOKEN="$(gh auth token)" 
+printf '{"source":{"repository":"%s","access_token":"%s"}}\n' "$REPO" "$GITHUB_TOKEN" | task check-local
 
 # get: clones and merges a PR into a destination directory
-echo '{"source":{"repository":"owner/repo","access_token":"ghp_..."},"version":{"pr":"1","commit":"abc123","committed":"2024-01-01T00:00:00Z"}}' \
-  | task get-local -- /tmp/pr-output
+REPO='owner/repo' 
+GITHUB_TOKEN="$(gh auth token)" 
+printf '{"source":{"repository":"%s","access_token":"%s"},"version":{"pr":"1","commit":"abc123","committed":"2024-01-01T00:00:00Z"}}\n' "$REPO" "$GITHUB_TOKEN" | task get-local -- /tmp/pr-output
 ```
 
 ## Supported Actions
