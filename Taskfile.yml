@@ -19,9 +19,6 @@ tasks:
     desc: Transpile
     deps: [ clean ]
     cmd: npx tsc
-    sources:
-      - src/**/*.ts
-      - tsconfig.json
 
   clean: rm -rf dist/
 
