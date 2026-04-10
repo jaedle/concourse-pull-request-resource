@@ -20,6 +20,7 @@
 - Run tasks with `task <name>` (e.g. `task test`, `task build`, `task check-local`).
 - Prefer inline tasks for single commands, i.e. `test: npx run vitest` instead of `test:\ndesc: Run all tests\ncmds:\n- npx vitest run`.
 - Have a `world` task that performs all verifications, builds and formatting / linting.
+- Keep Docker image builds in `world`, and keep the Dockerfile aligned with the project build command so verification catches drift early.
 
 ## Shell Scripts
 

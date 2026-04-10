@@ -7,6 +7,7 @@ tasks:
     cmds:
       - task: install
       - task: build
+      - task: build-docker-image
       - task: lint
       - task: test
 
@@ -19,6 +20,11 @@ tasks:
     desc: Transpile
     deps: [ clean ]
     cmd: npx tsc
+
+  build-docker-image:
+    desc: Build the Docker image
+    deps: [ build ]
+    cmd: docker build -t concourse-pull-request-resource:local .
 
   clean: rm -rf dist/
 
